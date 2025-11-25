@@ -114,30 +114,93 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Install EB CLI
         run: |
           pip install awsebcli boto3
 
+      # ----------------------------------------------------------
+      # 1. CREATE EB APPLICATION IF NOT EXISTS
+      # ----------------------------------------------------------
+      - name: Ensure EB Application Exists
+        run: |
+          APP_NAME="${{ vars.EB_APPLICATION_NAME }}"
+
+          echo "Checking EB application: $APP_NAME"
+
+          if aws elasticbeanstalk describe-applications \
+              --query "Applications[?ApplicationName=='$APP_NAME'] | length(@)" \
+              --output text | grep -q '^0$'; then
+
+            echo "EB Application not found. Creating..."
+            aws elasticbeanstalk create-application --application-name "$APP_NAME"
+
+          else
+            echo "EB Application already exists. Skipping."
+          fi
+
+      # ----------------------------------------------------------
+      # 2. CREATE EB ENVIRONMENT IF NOT EXISTS (Python 3.11 AL2023)
+      # ----------------------------------------------------------
+      - name: Ensure EB Environment Exists
+        run: |
+          APP_NAME="${{ vars.EB_APPLICATION_NAME }}"
+          ENV_NAME="${{ vars.EB_ENVIRONMENT_NAME }}"
+
+          echo "Checking EB environment: $ENV_NAME"
+
+          exists=$(aws elasticbeanstalk describe-environments \
+            --application-name "$APP_NAME" \
+            --query "Environments[?EnvironmentName=='$ENV_NAME'] | length(@)" \
+            --output text)
+
+          if [ "$exists" = "0" ]; then
+            echo "EB Environment not found. Creating it..."
+
+            aws elasticbeanstalk create-environment \
+              --application-name "$APP_NAME" \
+              --environment-name "$ENV_NAME" \
+              --solution-stack-name "Python 3.11 running on 64bit Amazon Linux 2023" \
+              --option-settings \
+                Namespace=aws:elasticbeanstalk:application:environment,OptionName=AWS_REGION,Value=${{ vars.AWS_REGION }} \
+                Namespace=aws:elasticbeanstalk:application:environment,OptionName=COGNITO_REGION,Value=${{ vars.COGNITO_REGION }} \
+                Namespace=aws:elasticbeanstalk:application:environment,OptionName=DYNAMODB_TABLE_NAME,Value=${{ vars.DYNAMODB_TABLE_NAME }} \
+                Namespace=aws:elasticbeanstalk:application:environment,OptionName=USERS_TABLE_NAME,Value=${{ vars.USERS_TABLE_NAME }} \
+                Namespace=aws:elasticbeanstalk:application:environment,OptionName=SENDER_EMAIL,Value=${{ secrets.SENDER_EMAIL }} \
+                Namespace=aws:elasticbeanstalk:application:environment,OptionName=ORDER_QUEUE_URL,Value=${{ needs.infra.outputs.MAIN_QUEUE_URL }} \
+                Namespace=aws:elasticbeanstalk:application:environment,OptionName=COGNITO_USER_POOL_ID,Value=${{ needs.infra.outputs.COGNITO_POOL_ID }} \
+                Namespace=aws:elasticbeanstalk:application:environment,OptionName=COGNITO_APP_CLIENT_ID,Value=${{ needs.infra.outputs.COGNITO_CLIENT_ID }}
+
+            echo "Environment creation started. It will take a few minutes."
+
+          else
+            echo "EB Environment already exists. Skipping."
+          fi
+
+      # ----------------------------------------------------------
+      # 3. PACKAGE FLASK APP
+      # ----------------------------------------------------------
       - name: Zip Flask App
         run: |
           mkdir -p deploy
-          zip -r deploy/app.zip application.py requirements.txt templates static -x "*.git*"
-          echo "Artifact packaged."
+          zip -r deploy/app.zip application.py requirements.txt templates static
 
       - name: Upload Artifact to S3
         env:
-          ARTIFACT_BUCKET: ${{ secrets.ARTIFACT_S3_BUCKET }}
+          ARTIFACT_BUCKET: ${{ vars.ARTIFACT_S3_BUCKET }}
         run: |
           VERSION_LABEL="v$(date +%s)"
           aws s3 cp deploy/app.zip s3://$ARTIFACT_BUCKET/$VERSION_LABEL.zip
           echo "VERSION_LABEL=$VERSION_LABEL" >> $GITHUB_ENV
 
+      # ----------------------------------------------------------
+      # 4. CREATE EB APPLICATION VERSION
+      # ----------------------------------------------------------
       - name: Create EB Application Version
         env:
-          EB_APP: ${{ secrets.EB_APPLICATION_NAME }}
-          ARTIFACT_BUCKET: ${{ secrets.ARTIFACT_S3_BUCKET }}
+          EB_APP: ${{ vars.EB_APPLICATION_NAME }}
+          ARTIFACT_BUCKET: ${{ vars.ARTIFACT_S3_BUCKET }}
           VERSION_LABEL: ${{ env.VERSION_LABEL }}
         run: |
           aws elasticbeanstalk create-application-version \
@@ -145,23 +208,17 @@ jobs:
             --version-label "$VERSION_LABEL" \
             --source-bundle S3Bucket="$ARTIFACT_BUCKET",S3Key="$VERSION_LABEL.zip"
 
+      # ----------------------------------------------------------
+      # 5. DEPLOY NEW VERSION TO EB
+      # ----------------------------------------------------------
       - name: Deploy to Elastic Beanstalk
         env:
-          EB_ENV: ${{ secrets.EB_ENVIRONMENT_NAME }}
+          EB_ENV: ${{ vars.EB_ENVIRONMENT_NAME }}
           VERSION_LABEL: ${{ env.VERSION_LABEL }}
         run: |
           aws elasticbeanstalk update-environment \
             --environment-name "$EB_ENV" \
-            --version-label "$VERSION_LABEL" \
-            --option-settings \
-              Namespace=aws:elasticbeanstalk:application:environment,OptionName=AWS_REGION,Value=${{ secrets.AWS_REGION }} \
-              Namespace=aws:elasticbeanstalk:application:environment,OptionName=COGNITO_USER_POOL_ID,Value=${{ needs.infra.outputs.COGNITO_POOL_ID }} \
-              Namespace=aws:elasticbeanstalk:application:environment,OptionName=COGNITO_APP_CLIENT_ID,Value=${{ needs.infra.outputs.COGNITO_CLIENT_ID }} \
-              Namespace=aws:elasticbeanstalk:application:environment,OptionName=COGNITO_REGION,Value=${{ secrets.COGNITO_REGION }} \
-              Namespace=aws:elasticbeanstalk:application:environment,OptionName=DYNAMODB_TABLE_NAME,Value=${{ secrets.DYNAMODB_TABLE_NAME }} \
-              Namespace=aws:elasticbeanstalk:application:environment,OptionName=USERS_TABLE_NAME,Value=${{ secrets.USERS_TABLE_NAME }} \
-              Namespace=aws:elasticbeanstalk:application:environment,OptionName=ORDER_QUEUE_URL,Value=${{ needs.infra.outputs.MAIN_QUEUE_URL }} \
-              Namespace=aws:elasticbeanstalk:application:environment,OptionName=SENDER_EMAIL,Value=${{ secrets.SENDER_EMAIL }}
+            --version-label "$VERSION_LABEL"
 
-      - name: Finish
-        run: echo "Deployment complete!"
+      - name: Complete
+        run: echo "🎉 Deployment to Elastic Beanstalk Successful!"
