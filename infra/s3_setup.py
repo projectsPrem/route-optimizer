@@ -5,8 +5,8 @@ import boto3
 from botocore.exceptions import ClientError
 
 REGION = os.getenv("AWS_REGION", "us-east-1")
-FRONTEND_BUCKET = os.getenv("FRONTEND_BUCKET", "route-optimization-frontend")
-ARTIFACT_BUCKET = os.getenv("ARTIFACT_S3_BUCKET", FRONTEND_BUCKET)
+FRONTEND_BUCKET = os.getenv("FRONTEND_BUCKET", "route-optimization-frontend1")
+# ARTIFACT_BUCKET = os.getenv("ARTIFACT_S3_BUCKET", FRONTEND_BUCKET)
 
 s3 = boto3.client("s3", region_name=REGION)
 
@@ -95,7 +95,7 @@ if __name__ == "__main__":
 
     create_bucket(FRONTEND_BUCKET)
 
-    if ARTIFACT_BUCKET != FRONTEND_BUCKET:
-        create_bucket(ARTIFACT_BUCKET)
+    # if ARTIFACT_BUCKET != FRONTEND_BUCKET:
+    #     create_bucket(ARTIFACT_BUCKET)
 
     print("   ✔ S3 setup complete")
