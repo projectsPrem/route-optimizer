@@ -5,8 +5,9 @@ flask_cors
 dotenv
 python-jose
 requests
-gunicorn==21.2.0
+# gunicorn==21.2.0
 google-auth
 requests
 google-auth-oauthlib
 google-auth-httplib2
+gunicorn
