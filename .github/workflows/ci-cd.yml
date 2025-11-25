@@ -1,0 +1,167 @@
+name: Full Infra + Lambda + EBS Deployment
+
+on:
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
+jobs:
+  infra:
+    runs-on: ubuntu-latest
+    outputs:
+      COGNITO_POOL_ID: ${{ steps.extract.outputs.pool }}
+      COGNITO_CLIENT_ID: ${{ steps.extract.outputs.client }}
+      MAIN_QUEUE_URL: ${{ steps.extract.outputs.queue }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install boto3
+        run: pip install boto3
+
+      - name: Run DynamoDB Setup
+        run: python3 infra/dynamodb_setup.py
+
+      - name: Run S3 Setup
+        run: python3 infra/s3_setup.py
+
+      - name: Run Cognito Setup
+        id: cognito
+        run: |
+          python3 infra/cognito_setup.py | tee cognito.log
+
+      - name: Run SSM Setup
+        env:
+          GOOGLE_CREDS_JSON: ${{ secrets.GOOGLE_CREDS_JSON }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+        run: |
+          export GOOGLE_CREDS_JSON="${GOOGLE_CREDS_JSON}"
+          python3 infra/ssm_setup.py
+
+      - name: Run SQS Setup
+        id: sqs
+        run: |
+          python3 infra/sqs_setup.py | tee sqs.log
+
+      - name: Extract Infra Outputs
+        id: extract
+        run: |
+          POOL=$(grep -oP 'OUTPUT_COGNITO_POOL_ID=\K.*' cognito.log)
+          CLIENT=$(grep -oP 'OUTPUT_COGNITO_CLIENT_ID=\K.*' cognito.log)
+          QUEUE=$(grep -oP 'OUTPUT_MAIN_QUEUE_URL=\K.*' sqs.log)
+
+          echo "pool=$POOL" >> $GITHUB_OUTPUT
+          echo "client=$CLIENT" >> $GITHUB_OUTPUT
+          echo "queue=$QUEUE" >> $GITHUB_OUTPUT
+
+          echo "Extracted Cognito Pool ID: $POOL"
+          echo "Extracted Cognito Client ID: $CLIENT"
+          echo "Extracted Queue URL: $QUEUE"
+
+  lambda-deploy:
+    needs: infra
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install boto3
+        run: pip install boto3
+
+      - name: Deploy Lambda (Create/Update + SQS Trigger)
+        env:
+          LAB_ROLE_ARN: ${{ secrets.LAB_ROLE_ARN }}
+          LAMBDA_NAME: ${{ secrets.LAMBDA_NAME }}
+          ORDER_QUEUE_URL: ${{ needs.infra.outputs.MAIN_QUEUE_URL }}
+        run: python3 infra/lambda_setup.py
+
+  eb-deploy:
+    needs: lambda-deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Install EB CLI
+        run: |
+          pip install awsebcli boto3
+
+      - name: Zip Flask App
+        run: |
+          mkdir -p deploy
+          zip -r deploy/app.zip application.py requirements.txt templates static -x "*.git*"
+          echo "Artifact packaged."
+
+      - name: Upload Artifact to S3
+        env:
+          ARTIFACT_BUCKET: ${{ secrets.ARTIFACT_S3_BUCKET }}
+        run: |
+          VERSION_LABEL="v$(date +%s)"
+          aws s3 cp deploy/app.zip s3://$ARTIFACT_BUCKET/$VERSION_LABEL.zip
+          echo "VERSION_LABEL=$VERSION_LABEL" >> $GITHUB_ENV
+
+      - name: Create EB Application Version
+        env:
+          EB_APP: ${{ secrets.EB_APPLICATION_NAME }}
+          ARTIFACT_BUCKET: ${{ secrets.ARTIFACT_S3_BUCKET }}
+          VERSION_LABEL: ${{ env.VERSION_LABEL }}
+        run: |
+          aws elasticbeanstalk create-application-version \
+            --application-name "$EB_APP" \
+            --version-label "$VERSION_LABEL" \
+            --source-bundle S3Bucket="$ARTIFACT_BUCKET",S3Key="$VERSION_LABEL.zip"
+
+      - name: Deploy to Elastic Beanstalk
+        env:
+          EB_ENV: ${{ secrets.EB_ENVIRONMENT_NAME }}
+          VERSION_LABEL: ${{ env.VERSION_LABEL }}
+        run: |
+          aws elasticbeanstalk update-environment \
+            --environment-name "$EB_ENV" \
+            --version-label "$VERSION_LABEL" \
+            --option-settings \
+              Namespace=aws:elasticbeanstalk:application:environment,OptionName=AWS_REGION,Value=${{ secrets.AWS_REGION }} \
+              Namespace=aws:elasticbeanstalk:application:environment,OptionName=COGNITO_USER_POOL_ID,Value=${{ needs.infra.outputs.COGNITO_POOL_ID }} \
+              Namespace=aws:elasticbeanstalk:application:environment,OptionName=COGNITO_APP_CLIENT_ID,Value=${{ needs.infra.outputs.COGNITO_CLIENT_ID }} \
+              Namespace=aws:elasticbeanstalk:application:environment,OptionName=COGNITO_REGION,Value=${{ secrets.COGNITO_REGION }} \
+              Namespace=aws:elasticbeanstalk:application:environment,OptionName=DYNAMODB_TABLE_NAME,Value=${{ secrets.DYNAMODB_TABLE_NAME }} \
+              Namespace=aws:elasticbeanstalk:application:environment,OptionName=USERS_TABLE_NAME,Value=${{ secrets.USERS_TABLE_NAME }} \
+              Namespace=aws:elasticbeanstalk:application:environment,OptionName=ORDER_QUEUE_URL,Value=${{ needs.infra.outputs.MAIN_QUEUE_URL }} \
+              Namespace=aws:elasticbeanstalk:application:environment,OptionName=SENDER_EMAIL,Value=${{ secrets.SENDER_EMAIL }}
+
+      - name: Finish
+        run: echo "🎉 Deployment complete!"
