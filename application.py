@@ -16,6 +16,7 @@ from google.oauth2 import service_account
 import google.auth.transport.requests
 import uuid
 import re
+from dotenv import load_dotenv
 
 # -------------------------------------------------------
 #  FLASK SETUP
@@ -34,20 +35,21 @@ logger = logging.getLogger(__name__)
 #  REQUIRED ENV VARIABLES (from Elastic Beanstalk)
 # -------------------------------------------------------
 
-REQUIRED_ENV = [
-    "AWS_REGION",
-    "COGNITO_USER_POOL_ID",
-    "COGNITO_APP_CLIENT_ID",
-    "COGNITO_REGION",
-    "DYNAMODB_TABLE_NAME",
-    "USERS_TABLE_NAME",
-    "ORDER_QUEUE_URL"
-]
+# REQUIRED_ENV = [
+#     "AWS_REGION",
+#     "COGNITO_USER_POOL_ID",
+#     "COGNITO_APP_CLIENT_ID",
+#     "COGNITO_REGION",
+#     "DYNAMODB_TABLE_NAME",
+#     "USERS_TABLE_NAME",
+#     "ORDER_QUEUE_URL"
+# ]
 
-missing = [v for v in REQUIRED_ENV if not os.getenv(v)]
-if missing:
-    raise EnvironmentError(f"Missing EB environment variables: {missing}")
+# missing = [v for v in REQUIRED_ENV if not os.getenv(v)]
+# if missing:
+#     raise EnvironmentError(f"Missing EB environment variables: {missing}")
 
+load_dotenv()
 AWS_REGION = os.getenv("AWS_REGION")
 COGNITO_USER_POOL_ID = os.getenv("COGNITO_USER_POOL_ID")
 COGNITO_APP_CLIENT_ID = os.getenv("COGNITO_APP_CLIENT_ID")
