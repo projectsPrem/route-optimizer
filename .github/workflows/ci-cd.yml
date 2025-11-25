@@ -164,4 +164,4 @@ jobs:
               Namespace=aws:elasticbeanstalk:application:environment,OptionName=SENDER_EMAIL,Value=${{ secrets.SENDER_EMAIL }}
 
       - name: Finish
-        run: echo "🎉 Deployment complete!"
+        run: echo "Deployment complete!"
