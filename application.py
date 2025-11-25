@@ -16,7 +16,7 @@ from google.oauth2 import service_account
 import google.auth.transport.requests
 import uuid
 import re
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 
 # -------------------------------------------------------
 #  FLASK SETUP
@@ -48,8 +48,8 @@ logger = logging.getLogger(__name__)
 # missing = [v for v in REQUIRED_ENV if not os.getenv(v)]
 # if missing:
 #     raise EnvironmentError(f"Missing EB environment variables: {missing}")
+load_dotenv(find_dotenv())
 
-load_dotenv()
 AWS_REGION = os.getenv("AWS_REGION")
 COGNITO_USER_POOL_ID = os.getenv("COGNITO_USER_POOL_ID")
 COGNITO_APP_CLIENT_ID = os.getenv("COGNITO_APP_CLIENT_ID")
