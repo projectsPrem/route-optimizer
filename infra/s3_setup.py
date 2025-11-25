@@ -12,8 +12,7 @@ def create_bucket(bucket_name):
     s3 = boto3.client("s3", region_name=REGION)
     try:
         s3.create_bucket(
-            Bucket=bucket_name,
-            CreateBucketConfiguration={"LocationConstraint": REGION}
+            Bucket=bucket_name
         )
         print(f"   ✔ Created S3 bucket: {bucket_name}")
     except ClientError as e:
