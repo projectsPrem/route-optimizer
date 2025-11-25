@@ -70,27 +70,40 @@ jobs:
           echo "Extracted Cognito Pool ID: $POOL"
           echo "Extracted Cognito Client ID: $CLIENT"
           echo "Extracted Queue URL: $QUEUE"
-      - name: Generate .env file
+
+      # ---------------------------------------------------------
+      # FIXED SECTION START
+      # ---------------------------------------------------------
+      - name: Generate Env File
         run: |
-          cat <<EOF > .env
+          # We use backend.env instead of .env to avoid hidden file issues in artifacts
+          cat <<EOF > backend.env
           AWS_REGION=${{ vars.AWS_REGION }}
           COGNITO_REGION=${{ vars.COGNITO_REGION }}
-
           DYNAMODB_TABLE_NAME=${{ vars.DYNAMODB_TABLE_NAME }}
           USERS_TABLE_NAME=${{ vars.USERS_TABLE_NAME }}
-
-          ORDER_QUEUE_URL=${{ steps.sqs.outputs.QUEUE_URL }}
-          COGNITO_POOL_ID=${{ steps.cognito.outputs.POOL_ID }}
-          COGNITO_CLIENT_ID=${{ steps.cognito.outputs.CLIENT_ID }}
-
+          
+          # FIXED: References point to 'extract' step, not 'sqs' or 'cognito' steps
+          ORDER_QUEUE_URL=${{ steps.extract.outputs.queue }}
+          COGNITO_POOL_ID=${{ steps.extract.outputs.pool }}
+          COGNITO_CLIENT_ID=${{ steps.extract.outputs.client }}
+          
           SENDER_EMAIL=${{ secrets.SENDER_EMAIL }}
           EOF
 
-      - name: Upload .env artifact
+          echo "File generated. Contents (excluding secrets):"
+          cat backend.env
+          ls -la backend.env
+
+      - name: Upload Env Artifact
         uses: actions/upload-artifact@v4
         with:
           name: backend-env-file
-          path: .env
+          path: backend.env
+          # if-no-files-found: error # Uncomment this to force fail if it's missing
+      # ---------------------------------------------------------
+      # FIXED SECTION END
+      # ---------------------------------------------------------
 
   lambda-deploy:
     needs: infra
