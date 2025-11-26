@@ -6,10 +6,10 @@ from botocore.exceptions import ClientError
 
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 LAMBDA_NAME = os.getenv("LAMBDA_NAME", "OrderProcessorLambda")
-ROLE_ARN = os.getenv("LAB_ROLE_ARN")  # should be provided as secret
+ROLE_ARN = os.getenv("LAB_ROLE_ARN","arn:aws:iam::593793054391:role/data-processor-lambda-role")  # should be provided as secret
 SOURCE_DIR = os.getenv("LAMBDA_SOURCE", "order_processor")
 ZIP_NAME = "lambda_package.zip"
-ORDER_QUEUE_URL = os.getenv("ORDER_QUEUE_URL")  # expected from infra outputs
+ORDER_QUEUE_URL = os.getenv("ORDER_QUEUE_URL","https://sqs.us-east-1.amazonaws.com/593793054391/route-orders-queue")  # expected from infra outputs
 
 lambda_client = boto3.client("lambda", region_name=AWS_REGION)
 sqs = boto3.client("sqs", region_name=AWS_REGION)

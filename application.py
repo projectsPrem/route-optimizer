@@ -47,7 +47,7 @@ COGNITO_APP_CLIENT_ID = os.getenv('COGNITO_APP_CLIENT_ID')
 COGNITO_REGION = os.getenv('COGNITO_REGION', AWS_REGION)
 ORDERS_TABLE_NAME = os.getenv('DYNAMODB_TABLE_NAME', 'orders')
 USERS_TABLE_NAME = os.getenv('USERS_TABLE_NAME', 'users')
-SQS_QUEUE_URL = os.getenv('SQS_QUEUE_URL')
+SQS_QUEUE_URL = os.getenv('ORDER_QUEUE_URL')
 
 # SSM Keys
 SSM_GOOGLE_CREDS = "/preethi-logistics/google-creds"
