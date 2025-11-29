@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Order - Preethi Logistics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAWEwAHWF6pJ4Debyezh4uWm9z_8NXRsro&libraries=places"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 flex flex-col min-h-screen">
+
+    <nav class="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 h-16 flex justify-between items-center">
+            <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href='customer.html'">
+                <i class="fa-solid fa-truck-fast text-blue-600 text-xl"></i>
+                <span class="font-extrabold text-xl text-slate-900">Preethi Logistics</span>
+            </div>
+            <button onclick="logout()" class="text-sm font-medium text-slate-500 hover:text-red-600 transition-colors flex items-center gap-2">
+                Logout <i class="fa-solid fa-right-from-bracket"></i>
+            </button>
+        </div>
+    </nav>
+
+    <main class="flex-grow max-w-2xl mx-auto w-full px-4 py-10">
+        
+        <div class="mb-6">
+            <a href="customer.html" class="text-blue-600 text-sm hover:underline flex items-center gap-1">
+                <i class="fa-solid fa-arrow-left"></i> Back to Dashboard
+            </a>
+            <h1 class="text-3xl font-bold text-slate-900 mt-2">New Shipment</h1>
+            <p class="text-slate-500 text-sm mt-1">Enter delivery details to schedule a pickup.</p>
+        </div>
+
+        <div class="bg-white rounded-xl shadow border border-slate-200 p-8">
+            <form id="order-form" class="space-y-5">
+                
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Receiver Name</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400"><i class="fa-solid fa-user"></i></span>
+                        <input type="text" id="customerName" class="w-full border-slate-300 rounded-lg border pl-10 pr-4 py-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="e.g. John Doe" required>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Delivery Address</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400"><i class="fa-solid fa-location-dot"></i></span>
+                        <input type="text" id="address" class="w-full border-slate-300 rounded-lg border pl-10 pr-4 py-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="Search for a location..." required>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1">Powered by Google Maps</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Contact Number</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400"><i class="fa-solid fa-phone"></i></span>
+                            <input type="tel" id="contactNumber" class="w-full border-slate-300 rounded-lg border pl-10 pr-4 py-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="+353..." required>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Package Size</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400"><i class="fa-solid fa-box"></i></span>
+                            <select id="packageSize" class="w-full border-slate-300 rounded-lg border pl-10 pr-4 py-2 focus:ring-blue-500 focus:border-blue-500 transition appearance-none bg-white">
+                                <option value="Small">Small (Envelope)</option>
+                                <option value="Medium" selected>Medium (Box)</option>
+                                <option value="Large">Large (Crate)</option>
+                            </select>
+                            <span class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-500"><i class="fa-solid fa-chevron-down text-xs"></i></span>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" id="submitBtn" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition shadow-md flex justify-center items-center gap-2">
+                    <span>Place Order</span> <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </form>
+        </div>
+    </main>
+
+    <div id="successModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full text-center transform scale-100">
+            <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
+                <i class="fa-solid fa-check text-green-600 text-3xl"></i>
+            </div>
+            <h3 class="text-xl font-bold text-slate-900">Order Confirmed!</h3>
+            <p class="text-sm text-gray-500 mt-2">Your delivery request has been received. You will receive an email update shortly.</p>
+            
+            <div class="mt-6 space-y-3">
+                <button onclick="window.location.href='customer.html'" class="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 font-bold shadow-sm transition">
+                    Go to Dashboard
+                </button>
+                <button onclick="document.getElementById('successModal').classList.add('hidden')" class="w-full border border-slate-300 text-slate-700 py-2.5 rounded-lg hover:bg-slate-50 font-bold transition">
+                    Create Another Order
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // CHANGE THIS FOR PRODUCTION
+        const API_URL = "http://route-optimization.eba-qjnnx62z.us-east-1.elasticbeanstalk.com"; 
+
+        // Auth Check
+        const token = localStorage.getItem("authToken");
+        if (!token) window.location.href = "index.html";
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = "index.html";
+        }
+
+        // Initialize Google Maps Autocomplete
+        function initAutocomplete() {
+            const input = document.getElementById('address');
+            if (input) {
+                new google.maps.places.Autocomplete(input, {
+                    types: ['geocode'],
+                    componentRestrictions: { country: "ie" } // Restrict to Ireland (Dublin)
+                });
+            }
+        }
+        
+        // Load Google Maps Script Callback
+        if (typeof google !== 'undefined') {
+            google.maps.event.addDomListener(window, 'load', initAutocomplete);
+        }
+
+        // Handle Form Submit
+        document.getElementById('order-form').onsubmit = async (e) => {
+            e.preventDefault();
+            
+            const btn = document.getElementById('submitBtn');
+            const originalContent = btn.innerHTML;
+            
+            btn.disabled = true; 
+            btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Processing...`;
+
+            try {
+                const res = await fetch(`/api/orders`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json', 
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({
+                        deliveryAddress: document.getElementById('address').value,
+                        contact: document.getElementById('contactNumber').value,
+                        packageSize: document.getElementById('packageSize').value,
+
+                        customerEmail: localStorage.getItem('customerEmail') 
+                    })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) throw new Error(data.error || "Failed to place order");
+
+                // Show Success Modal
+                document.getElementById('successModal').classList.remove('hidden');
+                document.getElementById('order-form').reset();
+
+            } catch (err) {
+                alert("Error: " + err.message);
+                console.error(err);
+            } finally {
+                btn.disabled = false; 
+                btn.innerHTML = originalContent;
+            }
+        };
+    </script>
+</body>
+</html>

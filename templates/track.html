@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Track Order - SwiftRoute</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    body { background-color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; }
+    #map { height: 100%; min-height: 500px; border-radius: 0.75rem; }
+    .timeline-line { position: absolute; left: 15px; top: 24px; bottom: 0; width: 2px; background: #e2e8f0; z-index: 0; }
+  </style>
+</head>
+<body class="text-slate-800 flex flex-col min-h-screen">
+
+  <nav class="bg-white border-b border-slate-200 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-2 font-bold text-xl text-slate-900">
+        <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-blue-200">
+          <i class="fa-solid fa-truck-fast text-sm"></i>
+        </div>
+        Preethi Logistics
+      </div>
+      <a href="customer.html" class="text-sm font-medium text-slate-500 hover:text-blue-600 transition-colors">
+        <i class="fa-solid fa-arrow-left mr-1"></i> Back to Orders
+      </a>
+    </div>
+  </nav>
+
+  <main class="flex-grow max-w-7xl mx-auto w-full px-4 py-8">
+    
+    <div class="flex justify-between items-end mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900">Track Your Order</h1>
+        <p class="text-slate-500 text-sm mt-1">Shipment Details & Route</p>
+      </div>
+      <div id="status-badge" class="px-4 py-1.5 rounded-full text-sm font-bold bg-slate-100 text-slate-600 shadow-sm border border-slate-200">
+        Loading...
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <div class="lg:col-span-1 space-y-6">
+        
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 relative overflow-hidden">
+          <h2 class="font-bold text-slate-800 mb-6">Shipment Progress</h2>
+          <div class="relative space-y-8 pl-2">
+            <div class="timeline-line"></div>
+            
+            <div class="relative z-10 flex items-start gap-4 timeline-step" data-status="pending">
+              <div class="w-8 h-8 rounded-full bg-slate-100 border-2 border-slate-300 flex items-center justify-center flex-shrink-0 text-slate-400 icon-box">
+                <i class="fa-solid fa-box"></i>
+              </div>
+              <div>
+                <h3 class="font-bold text-sm">Order Placed</h3>
+                <p class="text-xs text-slate-500">Order received at hub.</p>
+              </div>
+            </div>
+
+            <div class="relative z-10 flex items-start gap-4 timeline-step" data-status="transit">
+              <div class="w-8 h-8 rounded-full bg-slate-100 border-2 border-slate-300 flex items-center justify-center flex-shrink-0 text-slate-400 icon-box">
+                <i class="fa-solid fa-truck"></i>
+              </div>
+              <div>
+                <h3 class="font-bold text-sm">Out for Delivery</h3>
+                <p class="text-xs text-slate-500">Vehicle is on the way.</p>
+              </div>
+            </div>
+
+            <div class="relative z-10 flex items-start gap-4 timeline-step" data-status="delivered">
+              <div class="w-8 h-8 rounded-full bg-slate-100 border-2 border-slate-300 flex items-center justify-center flex-shrink-0 text-slate-400 icon-box">
+                <i class="fa-solid fa-check"></i>
+              </div>
+              <div>
+                <h3 class="font-bold text-sm">Delivered</h3>
+                <p class="text-xs text-slate-500">Package delivered.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+          <h2 class="font-bold text-slate-800 mb-4">Order Info</h2>
+          <div class="space-y-3 text-sm">
+            <div class="flex justify-between border-b border-slate-50 pb-2">
+              <span class="text-slate-500">Order ID</span>
+              <span class="font-mono font-medium" id="view-id">...</span>
+            </div>
+            <div class="flex justify-between border-b border-slate-50 pb-2">
+              <span class="text-slate-500">Package Size</span>
+              <span class="font-medium" id="view-package">...</span>
+            </div>
+            <div class="pt-1">
+              <span class="text-slate-500 block mb-1">Delivery Address</span>
+              <p class="font-medium text-slate-800 leading-snug bg-slate-50 p-2 rounded border border-slate-100" id="view-address">...</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="lg:col-span-2">
+        <div class="bg-white p-1 rounded-xl shadow-sm border border-slate-200 h-full min-h-[500px]">
+          <div id="map" class="w-full h-full bg-slate-50 rounded-lg"></div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // ---------------------------------------------------------
+    // 1. CONFIGURATION & ICONS (Defined FIRST to avoid errors)
+    // ---------------------------------------------------------
+    const API_URL = "http://route-optimization.eba-qjnnx62z.us-east-1.elasticbeanstalk.com";
+    const WAREHOUSE_LOC = { lat: 53.349242, lng: -6.242983 }; // Fixed Start Point
+
+    
+
+    let map;
+    let directionsService;
+    let directionsRenderer;
+
+    // ---------------------------------------------------------
+    // 2. AUTH & INIT
+    // ---------------------------------------------------------
+    const authToken = localStorage.getItem("authToken");
+    if (!authToken) window.location.href = "index.html";
+
+    function initMap() {
+        map = new google.maps.Map(document.getElementById("map"), {
+            center: WAREHOUSE_LOC,
+            zoom: 12,
+            disableDefaultUI: false, // Keep zoom controls
+            styles: [{ featureType: "poi", stylers: [{ visibility: "off" }] }] // Cleaner map
+        });
+
+        directionsService = new google.maps.DirectionsService();
+        directionsRenderer = new google.maps.DirectionsRenderer({
+            map: map,
+            suppressMarkers: true, // IMPORTANT: We will draw our own custom markers
+            polylineOptions: {
+                strokeColor: "#2563eb",
+                strokeWeight: 6,
+                strokeOpacity: 0.8
+            }
+        });
+
+        fetchOrderData();
+    }
+
+    // ---------------------------------------------------------
+    // 3. FETCH DATA
+    // ---------------------------------------------------------
+    async function fetchOrderData() {
+        const params = new URLSearchParams(window.location.search);
+        const orderId = params.get('orderId');
+
+        if (!orderId) {
+            alert("No Order ID found.");
+            window.location.href = 'orders.html';
+            return;
+        }
+
+        try {
+            // Try specific ID fetch first
+            let res = await fetch(`/api/orders/${orderId}`, {
+                headers: { "Authorization": `Bearer ${authToken}` }
+            });
+
+            let order = null;
+            
+            // Fallback: Fetch all if single endpoint fails
+            if (!res.ok) {
+                const allRes = await fetch(`/api/orders`, { headers: { "Authorization": `Bearer ${authToken}` } });
+                const allData = await allRes.json();
+                order = allData.orders.find(o => o.order_id === orderId);
+            } else {
+                const json = await res.json();
+                order = json.order;
+            }
+
+            if (!order) throw new Error("Order details not found.");
+
+            updateDashboardUI(order);
+            drawStaticRoute(order);
+
+        } catch (e) {
+            console.error(e);
+            const badge = document.getElementById('status-badge');
+            badge.innerText = "System Error";
+            badge.className = "px-4 py-1.5 rounded-full text-sm font-bold bg-red-100 text-red-600 border border-red-200";
+        }
+    }
+
+    // ---------------------------------------------------------
+    // 4. DRAW STATIC ROUTE (Warehouse -> Customer)
+    // ---------------------------------------------------------
+    function drawStaticRoute(order) {
+
+        // End Point: Customer
+        const endLoc = { 
+            lat: parseFloat(order.delivery_lat), 
+            lng: parseFloat(order.delivery_lng) 
+        };
+
+        // Start Point: Warehouse (Simulating "Previous Stop/Hub")
+        const startLoc = WAREHOUSE_LOC;
+
+        if (isNaN(endLoc.lat) || isNaN(endLoc.lng)) {
+            console.error("Invalid coordinates");
+            return;
+        }
+
+        // 1. Place Markers
+        // Icon: Warehouse (Start) - Blue Square/Flag
+    const START_ICON = {
+        path: "M4 2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 2v14h12V4H4z",
+        fillColor: "#3b82f6", // Blue
+        fillOpacity: 1,
+        strokeWeight: 2,
+        strokeColor: "#ffffff",
+        scale: 1.2,
+        anchor: new google.maps.Point(10, 20),
+    };
+
+    // Icon: Delivery Location (End) - Red Pin
+    const END_ICON = {
+        path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z",
+        fillColor: "#ef4444", // Red
+        fillOpacity: 1,
+        strokeWeight: 2,
+        strokeColor: "#ffffff",
+        scale: 2.2,
+        anchor: new google.maps.Point(12, 24),
+    };
+
+    // Icon: Truck (Vehicle) - Green Truck
+    const TRUCK_ICON = {
+        path: "M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z",
+        fillColor: "#10b981", // Green
+        fillOpacity: 1,
+        strokeWeight: 1,
+        strokeColor: "#ffffff",
+        scale: 1.3,
+        label:"Truck",
+        anchor: new google.maps.Point(12, 12),
+    };
+        
+        // Start Marker (Hub)
+        new google.maps.Marker({
+            position: startLoc,
+            map: map,
+            icon: START_ICON,
+            title: "Dispatch Hub"
+        });
+
+        // Vehicle Marker (Placed at Start to indicate assignment)
+        new google.maps.Marker({
+            position: startLoc, // Static at start
+            map: map,
+            icon: TRUCK_ICON,
+            zIndex: 999,
+            title: "Delivery Vehicle"
+        });
+
+        // End Marker (Customer)
+        new google.maps.Marker({
+            position: endLoc,
+            map: map,
+            icon: END_ICON,
+            title: "Your Location"
+        });
+
+        // 2. Draw Blue Path
+        directionsService.route({
+            origin: startLoc,
+            destination: endLoc,
+            travelMode: google.maps.TravelMode.DRIVING,
+        }, (response, status) => {
+            if (status === "OK") {
+                directionsRenderer.setDirections(response);
+            } else {
+                console.log("Route calculation failed:", status);
+                map.setCenter(endLoc); // Fallback center
+            }
+        });
+    }
+
+    // ---------------------------------------------------------
+    // 5. UI UPDATES
+    // ---------------------------------------------------------
+    function updateDashboardUI(order) {
+        // Text Fields
+        document.getElementById('view-id').innerText = `#${order.order_id.substring(0,8)}`;
+        document.getElementById('view-package').innerText = order.package_size || "Standard";
+        document.getElementById('view-address').innerText = order.delivery_locations;
+
+        // Status Logic
+        const badge = document.getElementById('status-badge');
+        badge.innerText = order.status;
+        
+        const s = (order.status || "").toLowerCase();
+        
+        if (s.includes('deliver')) {
+            badge.className = "px-4 py-1.5 rounded-full text-sm font-bold bg-green-100 text-green-700 border border-green-200";
+            highlightTimeline(3);
+        } else if (s.includes('transit') || s.includes('route')) {
+            badge.className = "px-4 py-1.5 rounded-full text-sm font-bold bg-blue-100 text-blue-700 border border-blue-200";
+            highlightTimeline(2);
+        } else {
+            badge.className = "px-4 py-1.5 rounded-full text-sm font-bold bg-yellow-100 text-yellow-700 border border-yellow-200";
+            highlightTimeline(1);
+        }
+    }
+
+    function highlightTimeline(step) {
+        const steps = document.querySelectorAll('.timeline-step');
+        steps.forEach((el, idx) => {
+            const iconBox = el.querySelector('.icon-box');
+            const title = el.querySelector('h3');
+            if (idx + 1 <= step) {
+                iconBox.className = "w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 z-10 ring-4 ring-blue-50";
+                title.classList.add("text-blue-700");
+            } else {
+                iconBox.className = "w-8 h-8 rounded-full bg-slate-100 border-2 border-slate-300 text-slate-400 flex items-center justify-center flex-shrink-0 z-10";
+                title.classList.remove("text-blue-700");
+            }
+        });
+    }
+  </script>
+
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAWEwAHWF6pJ4Debyezh4uWm9z_8NXRsro&callback=initMap" async defer></script>
+</body>
+</html>

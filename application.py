@@ -1,6 +1,6 @@
 from decimal import Decimal
 import boto3
-from flask import Flask, request, jsonify
+from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 import os
 from dotenv import load_dotenv, find_dotenv
@@ -42,12 +42,12 @@ CORS(application)
 # if missing: logger.warning(f"Missing vars: {missing}")
 
 AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
-COGNITO_USER_POOL_ID = os.getenv('COGNITO_USER_POOL_ID')
-COGNITO_APP_CLIENT_ID = os.getenv('COGNITO_APP_CLIENT_ID')
+COGNITO_USER_POOL_ID = os.getenv('COGNITO_USER_POOL_ID', '')
+COGNITO_APP_CLIENT_ID = os.getenv('COGNITO_APP_CLIENT_ID', '')
 COGNITO_REGION = os.getenv('COGNITO_REGION', AWS_REGION)
 ORDERS_TABLE_NAME = os.getenv('DYNAMODB_TABLE_NAME', 'orders')
 USERS_TABLE_NAME = os.getenv('USERS_TABLE_NAME', 'users')
-SQS_QUEUE_URL = os.getenv('ORDER_QUEUE_URL')
+SQS_QUEUE_URL = os.getenv('ORDER_QUEUE_URL', '')
 
 # SSM Keys
 SSM_GOOGLE_CREDS = "/preethi-logistics/google-creds"
@@ -70,6 +70,37 @@ try:
 except Exception as e:
     logger.critical(f"AWS Client Init Error: {e}")
     raise e
+
+
+# --- FRONTEND ROUTES (Serving HTML) ---
+
+@application.route('/')
+def index():
+    return render_template('index.html')
+
+@application.route('/customer.html')
+@application.route('/customer')
+def customer():
+    return render_template('customer.html')
+
+@application.route('/partner.html')
+@application.route('/partner')
+def partner():
+    return render_template('partner.html')
+
+@application.route('/create_order.html')
+@application.route('/create-order')
+def create_order_page():
+    return render_template('create_order.html')
+
+@application.route('/track.html')
+@application.route('/track')
+def track():
+    return render_template('track.html')
+
+@application.route('/health')
+def health():
+    return jsonify({"status": "online", "mode": "Event-Driven + Frontend Served"}), 200
 
 # --- HELPERS ---
 
@@ -160,10 +191,7 @@ def convert_decimal(obj):
 
 # --- ROUTES ---
 
-@application.route('/')
-def health(): return jsonify({"status": "online"}), 200
-
-@application.route('/signup', methods=['POST'])
+@application.route('/api/signup', methods=['POST'])
 def signup():
     data = request.get_json() or {}
     email = data.get('email')
@@ -189,7 +217,7 @@ def signup():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
 
-@application.route('/login', methods=['POST'])
+@application.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
     try:
@@ -200,7 +228,7 @@ def login():
         return jsonify(resp['AuthenticationResult']), 200
     except: return jsonify({'error': 'Invalid credentials'}), 401
 
-@application.route('/confirm', methods=['POST'])
+@application.route('/api/confirm', methods=['POST'])
 def confirm():
     data = request.get_json()
     try:

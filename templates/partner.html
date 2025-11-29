@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Delivery Dashboard - Preethi Logistics</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    html,body { height: 100%; margin:0; padding:0; background-color: #f8fafc; }
+    #map { height: 100%; min-height: 500px; border-radius: 0.75rem; }
+    
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    .toast {
+      position: fixed; right: 1rem; bottom: 1.5rem; padding: 0.75rem 1.25rem;
+      border-radius: 0.5rem; color: white; font-weight: 600;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); z-index: 9999; 
+      opacity: 0; transform: translateY(20px); transition: all 0.3s ease;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    .active-card { border-left: 4px solid #2563eb; background: #eff6ff; }
+    .modal-bg { background-color: rgba(0, 0, 0, 0.5); }
+  </style>
+</head>
+<body class="text-slate-800">
+
+  <div class="max-w-7xl mx-auto py-6 px-4 h-screen flex flex-col">
+    
+    <header class="flex justify-between items-end mb-4">
+      <div>
+        <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">
+          <i class="fa-solid fa-truck-fast text-blue-600 mr-2"></i>Preethi Logistics
+        </h1>
+        <p class="text-sm text-slate-500">Route Optimization & Delivery Confirmation</p>
+      </div>
+      <div class="flex space-x-3">
+        <button id="view-completed-btn" class="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 text-sm font-medium shadow-sm transition-colors">
+            <i class="fa-solid fa-clipboard-check mr-1"></i> History
+        </button>
+        <button onclick="logout()" class="px-4 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-red-50 hover:text-red-600 text-sm font-medium shadow-sm transition-colors">
+            <i class="fa-solid fa-sign-out-alt"></i>
+        </button>
+      </div>
+    </header>
+
+    <main class="flex gap-6 flex-grow overflow-hidden">
+      
+      <section class="w-1/3 flex flex-col bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+        <div class="p-4 bg-slate-800 text-white">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-xs font-bold uppercase opacity-70">Pending Orders</span>
+            <span id="simulation-status" class="text-xs font-bold bg-green-500 text-white px-2 py-0.5 rounded">Online</span>
+          </div>
+          <h2 id="current-action-text" class="text-lg font-bold">Select and Deliver</h2>
+        </div>
+        
+        <div id="orders-list" class="flex-grow overflow-y-auto p-4 space-y-3 bg-slate-50">
+          <div class="text-center text-slate-400 mt-10">Loading orders...</div>
+        </div>
+
+        <div class="p-4 border-t border-slate-200 bg-white shadow-up z-10">
+           <div class="flex justify-between text-xs text-slate-500 mb-2">
+             <span>Selected: <span id="selected-count" class="font-bold text-slate-800">0</span></span>
+             <span id="dist-display" class="hidden text-blue-600 font-mono">0m to stop</span>
+           </div>
+           <div id="action-buttons">
+             <button id="optimize-btn" disabled class="w-full bg-blue-600 disabled:bg-slate-300 disabled:cursor-not-allowed hover:bg-blue-700 text-white py-3 rounded-lg shadow-md font-bold transition-all flex justify-center items-center">
+               <span>Optimize Route</span> <i class="fa-solid fa-route ml-2"></i>
+             </button>
+           </div>
+        </div>
+      </section>
+
+      <section class="w-2/3 rounded-xl border border-slate-200 shadow-lg overflow-hidden relative">
+        <div id="map" class="w-full h-full bg-slate-100"></div>
+        
+        <div class="absolute top-4 right-4 bg-white/95 backdrop-blur p-3 rounded-lg shadow-lg border border-slate-200 text-xs space-y-2">
+          <div class="flex items-center"><img src="http://maps.google.com/mapfiles/ms/icons/blue-dot.png" class="w-4 h-4 mr-2"> Warehouse</div>
+          <div class="flex items-center"><img src="http://maps.google.com/mapfiles/ms/icons/red-dot.png" class="w-4 h-4 mr-2"> Pending Order</div>
+          <div class="flex items-center"><img src="http://maps.google.com/mapfiles/ms/icons/green-dot.png" class="w-4 h-4 mr-2"> Delivered</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="completed-modal" class="fixed inset-0 modal-bg hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 flex flex-col max-h-[80vh]">
+      <div class="p-4 border-b border-slate-200 flex justify-between items-center bg-green-50 rounded-t-xl">
+        <h2 class="text-lg font-bold text-green-800"><i class="fa-solid fa-check-circle mr-2"></i>Completed History</h2>
+        <button onclick="closeCompletedModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-xl"></i></button>
+      </div>
+      <div id="completed-list-content" class="p-4 overflow-y-auto space-y-3">
+        </div>
+      <div class="p-4 border-t border-slate-200 text-right">
+        <button onclick="closeCompletedModal()" class="px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 font-medium">Close</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // --- CONFIGURATION ---
+  // REPLACE WITH YOUR ELASTIC BEANSTALK URL
+  // const API_URL = "http://route-optimization.eba-qjnnx62z.us-east-1.elasticbeanstalk.com"; 
+  
+  // Dublin Warehouse Location
+  const WAREHOUSE_LOC = { lat: 53.349242, lng: -6.242983 }; 
+  
+  // Simulation Constants
+  const VEHICLE_SPEED = 10; 
+  const STOP_DISTANCE = 50;
+  
+  // --- AUTH CHECK ---
+  const authToken = localStorage.getItem('authToken');
+  if (!authToken) {
+      window.location.href = 'index.html';
+  }
+
+  // --- STATE ---
+  let map, polyline, vehicleMarker;
+  let orders = [];
+  const selectedOrders = new Map(); 
+  let markers = []; 
+  
+  // Simulation State
+  let routePath = [];
+  let deliverySequence = [];
+  let currentPathIndex = 0;
+  let currentStopIndex = 0;
+  let animationId = null;
+  let isSimulating = false;
+
+  // --- ICONS ---
+  const ICON_WAREHOUSE = "http://maps.google.com/mapfiles/ms/icons/blue-dot.png";
+  const ICON_PENDING = "http://maps.google.com/mapfiles/ms/icons/red-dot.png";
+  const ICON_DONE = "http://maps.google.com/mapfiles/ms/icons/green-dot.png";
+  const ICON_TRUCK = {
+    path: "M12 0L24 24L12 18L0 24L12 0Z",
+    fillColor: "#2563eb", fillOpacity: 1, strokeWeight: 2, strokeColor: "#fff", scale: 0.8, rotation: 0, anchor: {x:12, y:12}
+  };
+
+  // --- UTILS ---
+  function showToast(msg, type='success') {
+    const t = document.createElement('div');
+    t.className = 'toast show';
+    t.style.backgroundColor = type === 'success' ? '#10b981' : '#ef4444';
+    t.innerHTML = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+  }
+
+  function logout() {
+      localStorage.clear();
+      window.location.href = 'index.html';
+  }
+
+  // --- AUTH ERROR HANDLER ---
+  function handleAuthError(response) {
+    if (response.status === 401) {
+        console.warn("Session expired");
+        localStorage.clear();
+        window.location.href = 'index.html';
+        return true; 
+    }
+    return false; 
+  }
+
+  // --- MAP INIT ---
+  function initMap() {
+    map = new google.maps.Map(document.getElementById("map"), {
+      center: WAREHOUSE_LOC,
+      zoom: 12,
+      styles: [{ featureType: "poi", stylers: [{ visibility: "off" }] }]
+    });
+    polyline = new google.maps.Polyline({ strokeColor: "#2563eb", strokeWeight: 6, map: map });
+    
+    new google.maps.Marker({
+      position: WAREHOUSE_LOC,
+      map: map,
+      icon: ICON_WAREHOUSE,
+      title: "Warehouse"
+    });
+  }
+
+  // --- DATA HANDLING ---
+  async function fetchOrders() {
+    try {
+      const res = await fetch(`/api/orders`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      
+      if (handleAuthError(res)) return; 
+      
+      const data = await res.json();
+      orders = data.orders || [];
+      renderOrdersList();
+      renderAllMarkers();
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to load orders", "error");
+    }
+  }
+
+  function renderOrdersList() {
+    const container = document.getElementById('orders-list');
+    container.innerHTML = '';
+    
+    // Filter: Show only Undelivered orders
+    const pendingOrders = orders.filter(o => o.status !== 'Delivered');
+    
+    if(pendingOrders.length === 0) {
+      container.innerHTML = `
+        <div class="text-center text-slate-400 mt-10">
+            <i class="fa-solid fa-check-double text-3xl mb-2 opacity-50"></i>
+            <p>No pending orders!</p>
+        </div>`;
+      return;
+    }
+
+    pendingOrders.forEach(order => {
+      const isSelected = selectedOrders.has(order.order_id);
+      
+      const el = document.createElement('div');
+      el.className = `p-3 rounded border bg-white cursor-pointer hover:shadow-md transition-all ${isSelected ? 'active-card' : 'border-slate-200'}`;
+      el.id = `order-card-${order.order_id}`;
+
+      el.innerHTML = `
+        <div class="flex items-start gap-3">
+          <input type="checkbox" class="mt-1 pointer-events-none" ${isSelected ? 'checked' : ''}>
+          <div>
+            <div class="text-sm font-bold text-slate-800">${order.delivery_locations}</div>
+            <div class="text-xs text-slate-500 flex items-center gap-2 mt-1">
+              <span>#${order.order_id.substring(0,6)}</span>
+              <span class="px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700">${order.status}</span>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      el.onclick = () => toggleSelection(order);
+      container.appendChild(el);
+    });
+    
+    updateUIState();
+  }
+
+  function toggleSelection(order) {
+    if(selectedOrders.has(order.order_id)) selectedOrders.delete(order.order_id);
+    else selectedOrders.set(order.order_id, order);
+    renderOrdersList();
+    updateUIState();
+  }
+
+  function updateUIState() {
+    const countEl = document.getElementById('selected-count');
+    if (countEl) countEl.innerText = selectedOrders.size;
+
+    const btn = document.getElementById('optimize-btn');
+    if (btn) btn.disabled = selectedOrders.size === 0;
+  }
+
+  // --- MARKERS LOGIC ---
+  function renderAllMarkers() {
+    markers.forEach(m => m.setMap(null));
+    markers = [];
+
+    orders.forEach(order => {
+      let lat = parseFloat(order.delivery_lat);
+      let lng = parseFloat(order.delivery_lng);
+      
+      if(isNaN(lat) || isNaN(lng)) {
+         if(order.delivery_locations && order.delivery_locations.includes(',')) {
+             const parts = order.delivery_locations.split(',');
+             lat = parseFloat(parts[0]);
+             lng = parseFloat(parts[1]);
+         }
+      }
+
+      if(!isNaN(lat) && !isNaN(lng)) {
+        const marker = new google.maps.Marker({
+          position: { lat, lng },
+          map: map,
+          icon: order.status === 'Delivered' ? ICON_DONE : ICON_PENDING,
+          title: order.delivery_locations
+        });
+        markers.push(marker);
+      }
+    });
+  }
+
+  function renderSequencedMarkers() {
+    markers.forEach(m => m.setMap(null));
+    markers = [];
+
+    deliverySequence.forEach((order, index) => {
+      const lat = parseFloat(order.delivery_lat);
+      const lng = parseFloat(order.delivery_lng);
+      const isDelivered = order.status === 'Delivered';
+      
+      const marker = new google.maps.Marker({
+        position: { lat, lng },
+        map: map,
+        icon: isDelivered ? ICON_DONE : null, 
+        label: isDelivered ? null : {
+          text: (index + 1).toString(),
+          color: "white",
+          fontWeight: "bold",
+          fontSize: "14px"
+        },
+        title: `Stop ${index + 1}: ${order.delivery_locations}`,
+        animation: google.maps.Animation.DROP
+      });
+
+      markers.push(marker);
+    });
+  }
+
+  // --- COMPLETED ORDERS MODAL ---
+  function showCompletedOrders() {
+    const modal = document.getElementById('completed-modal');
+    const container = document.getElementById('completed-list-content');
+    
+    const delivered = orders.filter(o => o.status === 'Delivered');
+    container.innerHTML = '';
+
+    if (delivered.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-8 text-slate-400">
+                <i class="fa-solid fa-clipboard text-4xl mb-3 opacity-50"></i>
+                <p>No completed deliveries yet.</p>
+            </div>
+        `;
+    } else {
+        delivered.forEach(order => {
+            const div = document.createElement('div');
+            div.className = 'bg-white border border-green-200 p-3 rounded-lg flex justify-between items-center shadow-sm';
+            div.innerHTML = `
+                <div>
+                    <div class="font-bold text-slate-800 text-sm">${order.delivery_locations}</div>
+                    <div class="text-xs text-slate-500 mt-1">ID: #${order.order_id.substring(0,8)}</div>
+                </div>
+                <div class="text-right">
+                    <span class="px-2 py-1 bg-green-100 text-green-800 text-xs font-bold rounded-full">Delivered</span>
+                    <div class="text-xs text-slate-400 mt-1">${order.delivered_at ? new Date(order.delivered_at).toLocaleTimeString() : 'Recently'}</div>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    }
+    modal.classList.remove('hidden');
+  }
+
+  function closeCompletedModal() {
+    document.getElementById('completed-modal').classList.add('hidden');
+  }
+
+  // --- OPTIMIZATION & SIMULATION ---
+  document.getElementById('optimize-btn').onclick = async () => {
+    const btn = document.getElementById('optimize-btn');
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Processing...`;
+    
+    try {
+      const orderIds = Array.from(selectedOrders.keys());
+      const res = await fetch(`/api/optimize-route`, {
+        method: "POST",
+        headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ order_ids: orderIds })
+      });
+      
+      if (handleAuthError(res)) return; 
+
+      const json = await res.json();
+      if(!json.success) throw new Error(json.error || "Optimization failed");
+
+      routePath = google.maps.geometry.encoding.decodePath(json.polyline);
+      polyline.setPath(routePath);
+      
+      deliverySequence = json.optimized_sequence.map(item => {
+          return orders.find(o => o.order_id === item.order_id);
+      }).filter(Boolean);
+
+      renderSequencedMarkers(); 
+
+      const bounds = new google.maps.LatLngBounds();
+      routePath.forEach(p => bounds.extend(p));
+      map.fitBounds(bounds);
+
+      setupStartButton();
+      showToast("Route Optimized! Sequence Updated.");
+
+    } catch (e) {
+      console.error(e);
+      showToast(e.message, "error");
+      btn.disabled = false;
+      btn.innerText = "Optimize Route";
+    }
+  };
+
+  function setupStartButton() {
+    const area = document.getElementById('action-buttons');
+    area.innerHTML = `
+      <button onclick="startSimulation()" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg shadow-md font-bold animate-bounce">
+        Start Delivery <i class="fa-solid fa-play ml-2"></i>
+      </button>
+    `;
+    document.getElementById('current-action-text').innerText = "Ready to Depart";
+    
+    if(vehicleMarker) vehicleMarker.setMap(null);
+    vehicleMarker = new google.maps.Marker({
+      position: routePath[0],
+      map: map,
+      icon: ICON_TRUCK,
+      zIndex: 999
+    });
+  }
+
+  function startSimulation() {
+    isSimulating = true;
+    currentPathIndex = 0;
+    currentStopIndex = 0;
+    
+    document.getElementById('action-buttons').innerHTML = `
+      <button disabled class="w-full bg-slate-100 text-slate-500 border border-slate-300 py-3 rounded-lg font-bold">
+        En Route <i class="fa-solid fa-spinner fa-spin ml-2"></i>
+      </button>
+    `;
+    document.getElementById('current-action-text').innerText = "Driving to Next Stop...";
+    document.getElementById('dist-display').classList.remove('hidden');
+
+    animateVehicle();
+  }
+
+  function animateVehicle() {
+    if(!isSimulating) return;
+    
+    if(currentStopIndex >= deliverySequence.length) {
+      finishRoute();
+      return;
+    }
+
+    if(currentPathIndex < routePath.length - 1) {
+      currentPathIndex++;
+      const pos = routePath[currentPathIndex];
+      const nextPos = routePath[currentPathIndex+1] || pos;
+
+      vehicleMarker.setPosition(pos);
+      
+      const heading = google.maps.geometry.spherical.computeHeading(pos, nextPos);
+      const icon = vehicleMarker.getIcon();
+      icon.rotation = heading;
+      vehicleMarker.setIcon(icon);
+
+      if(!map.getBounds().contains(pos)) map.panTo(pos);
+
+      const targetOrder = deliverySequence[currentStopIndex];
+      const targetLat = parseFloat(targetOrder.delivery_lat);
+      const targetLng = parseFloat(targetOrder.delivery_lng);
+      const targetLoc = new google.maps.LatLng(targetLat, targetLng);
+      
+      const dist = google.maps.geometry.spherical.computeDistanceBetween(pos, targetLoc);
+      document.getElementById('dist-display').innerText = `${Math.round(dist)}m to stop`;
+
+      if(dist < STOP_DISTANCE) {
+        arriveAtStop(targetOrder);
+      } else {
+        animationId = setTimeout(animateVehicle, VEHICLE_SPEED);
+      }
+    } else {
+      finishRoute();
+    }
+  }
+
+  function arriveAtStop(order) {
+    isSimulating = false;
+    clearTimeout(animationId);
+    
+    document.getElementById('current-action-text').innerText = "Arrived at Destination";
+    document.getElementById('action-buttons').innerHTML = `
+      <div class="text-center mb-2 text-sm text-slate-600">Order #${order.order_id.substring(0,6)}</div>
+      <button onclick="confirmDelivery('${order.order_id}')" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg shadow-md font-bold">
+        Complete Delivery <i class="fa-solid fa-check ml-2"></i>
+      </button>
+    `;
+    showToast("Vehicle Arrived!");
+  }
+
+  async function confirmDelivery(orderId) {
+    try {
+       const res = await fetch(`/api/orders/mark-delivered`, {
+         method: 'POST',
+         headers: {
+             'Content-Type': 'application/json',
+             'Authorization': `Bearer ${authToken}`
+         },
+         body: JSON.stringify({ order_id: orderId })
+       });
+       
+       if (handleAuthError(res)) return; // Redirect if 401
+
+       const json = await res.json();
+       if(!json.success) throw new Error(json.error);
+       
+       showToast("Delivery Confirmed");
+       
+       // Update local state
+       const order = orders.find(o => o.order_id === orderId);
+       if(order) {
+           order.status = 'Delivered';
+           order.delivered_at = new Date().toISOString();
+       }
+       
+       // Update UI: Remove from list, update markers
+       renderOrdersList();
+       renderSequencedMarkers(); 
+
+       currentStopIndex++;
+       isSimulating = true;
+       document.getElementById('action-buttons').innerHTML = `
+          <button disabled class="w-full bg-slate-100 text-slate-500 py-3 rounded-lg font-bold">
+             Resuming Route...
+          </button>`;
+       
+       setTimeout(animateVehicle, 1000);
+
+    } catch(e) {
+       console.error(e);
+       showToast("Error confirming delivery", "error");
+    }
+  }
+
+  function finishRoute() {
+    isSimulating = false;
+    document.getElementById('current-action-text').innerText = "Route Completed!";
+    document.getElementById('dist-display').classList.add('hidden');
+    document.getElementById('action-buttons').innerHTML = `
+      <div class="p-4 bg-green-100 text-green-800 rounded mb-2 text-center">All orders delivered!</div>
+      <button onclick="location.reload()" class="w-full bg-white border border-slate-300 py-2 rounded hover:bg-slate-50">Reset Dashboard</button>
+    `;
+    showToast("Route Finished!");
+  }
+
+  // --- INIT ---
+  document.getElementById('view-completed-btn').onclick = showCompletedOrders;
+  window.onload = () => {
+      fetchOrders();
+  };
+
+</script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAWEwAHWF6pJ4Debyezh4uWm9z_8NXRsro&callback=initMap&libraries=geometry" async defer></script>
+</body>
+</html>
