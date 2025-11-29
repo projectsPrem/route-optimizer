@@ -118,7 +118,7 @@
   // --- AUTH CHECK ---
   const authToken = localStorage.getItem('authToken');
   if (!authToken) {
-      window.location.href = '/index';
+      window.location.href = '/';
   }
 
   // --- STATE ---
@@ -156,7 +156,7 @@
 
   function logout() {
       localStorage.clear();
-      window.location.href = '/index';
+      window.location.href = '/';
   }
 
   // --- AUTH ERROR HANDLER ---
@@ -164,7 +164,7 @@
     if (response.status === 401) {
         console.warn("Session expired");
         localStorage.clear();
-        window.location.href = '/index';
+        window.location.href = '/';
         return true; 
     }
     return false; 

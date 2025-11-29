@@ -106,11 +106,11 @@
 
         // Auth Check
         const token = localStorage.getItem("authToken");
-        if (!token) window.location.href = "/index";
+        if (!token) window.location.href = "/";
 
         function logout() {
             localStorage.clear();
-            window.location.href = "/index";
+            window.location.href = "/";
         }
 
         // Initialize Google Maps Autocomplete

@@ -127,7 +127,7 @@
     // 2. AUTH & INIT
     // ---------------------------------------------------------
     const authToken = localStorage.getItem("authToken");
-    if (!authToken) window.location.href = "/index";
+    if (!authToken) window.location.href = "/";
 
     function initMap() {
         map = new google.maps.Map(document.getElementById("map"), {
