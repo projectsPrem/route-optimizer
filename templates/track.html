@@ -22,7 +22,7 @@
         </div>
         Preethi Logistics
       </div>
-      <a href="customer.html" class="text-sm font-medium text-slate-500 hover:text-blue-600 transition-colors">
+      <a href="/customer" class="text-sm font-medium text-slate-500 hover:text-blue-600 transition-colors">
         <i class="fa-solid fa-arrow-left mr-1"></i> Back to Orders
       </a>
     </div>
@@ -127,7 +127,7 @@
     // 2. AUTH & INIT
     // ---------------------------------------------------------
     const authToken = localStorage.getItem("authToken");
-    if (!authToken) window.location.href = "index.html";
+    if (!authToken) window.location.href = "/index";
 
     function initMap() {
         map = new google.maps.Map(document.getElementById("map"), {
@@ -160,7 +160,7 @@
 
         if (!orderId) {
             alert("No Order ID found.");
-            window.location.href = 'orders.html';
+            window.location.href = '/orders';
             return;
         }
 

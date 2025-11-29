@@ -14,7 +14,7 @@
 
   <nav class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
     <div class="max-w-7xl mx-auto px-4 h-16 flex justify-between items-center">
-        <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href='index.html'">
+        <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href='/index'">
           <i class="fa-solid fa-truck-fast text-blue-600 text-xl"></i>
           <span class="font-extrabold text-xl text-slate-900">Preethi Logistics</span>
         </div>
@@ -31,7 +31,7 @@
         <h1 class="text-2xl font-bold text-slate-900">My Orders</h1>
         <p class="text-slate-500 mt-1">Track current deliveries and view order history.</p>
       </div>
-      <a href="create_order.html" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm text-sm font-bold flex items-center gap-2">
+      <a href="/create_order" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm text-sm font-bold flex items-center gap-2">
         <i class="fa-solid fa-plus"></i> New Order
       </a>
     </div>
@@ -59,10 +59,10 @@
     const API_URL = "http://route-optimization.eba-qjnnx62z.us-east-1.elasticbeanstalk.com";
 
     const token = localStorage.getItem("authToken");
-    if (!token) window.location.href = "index.html";
+    if (!token) window.location.href = "/index";
     document.getElementById("username-display").textContent = localStorage.getItem("userName") || "User";
 
-    function logout() { localStorage.clear(); window.location.href = "index.html"; }
+    function logout() { localStorage.clear(); window.location.href = "/index"; }
 
     async function deleteOrder(id, e) {
         e.stopPropagation();
@@ -99,7 +99,7 @@
                 const badgeColor = isPending ? "bg-yellow-100 text-yellow-700" : (o.status === "Delivered" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700");
                 
                 tbody.innerHTML += `
-                <tr class="hover:bg-slate-50 cursor-pointer transition" onclick="window.location.href='track.html?orderId=${o.order_id}'">
+                <tr class="hover:bg-slate-50 cursor-pointer transition" onclick="window.location.href='/track?orderId=${o.order_id}'">
                     <td class="px-6 py-4 font-mono text-xs text-slate-500">#${o.order_id.substring(0,8)}</td>
                     <td class="px-6 py-4 text-slate-500">${date}</td>
                     <td class="px-6 py-4 font-medium text-slate-800 truncate max-w-xs">${o.delivery_locations}</td>

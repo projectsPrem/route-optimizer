@@ -78,22 +78,18 @@ except Exception as e:
 def index():
     return render_template('index.html')
 
-@application.route('/customer.html')
 @application.route('/customer')
 def customer():
     return render_template('customer.html')
 
-@application.route('/partner.html')
 @application.route('/partner')
 def partner():
     return render_template('partner.html')
 
-@application.route('/create_order.html')
 @application.route('/create-order')
 def create_order_page():
     return render_template('create_order.html')
 
-@application.route('/track.html')
 @application.route('/track')
 def track():
     return render_template('track.html')

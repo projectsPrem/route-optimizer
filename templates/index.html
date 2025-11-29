@@ -315,7 +315,7 @@
 
                 showModal('Success', 'Login successful! Redirecting...', false, { isRedirecting: true });
                 setTimeout(() => {
-                    window.location.href = role === 'agent' ? 'partner.html' : 'customer.html';
+                    window.location.href = role === 'agent' ? '/partner' : '/customer';
                 }, 1000);
             }
         } catch (error) {
@@ -335,7 +335,7 @@
 
     if (localStorage.getItem('authToken')) {
         const role = localStorage.getItem('userRole');
-        window.location.href = role === 'agent' ? 'partner.html' : 'customer.html';
+        window.location.href = role === 'agent' ? '/partner' : '/customer';
     }
 </script>
 </body>
