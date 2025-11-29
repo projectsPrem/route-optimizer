@@ -1,75 +1,94 @@
-#!/usr/bin/env python3
 import json
 import boto3
 import os
-from datetime import datetime, timezone
+import urllib.request
+import urllib.parse
+from decimal import Decimal
 
-AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
-ORDERS_TABLE = os.getenv("DYNAMODB_TABLE_NAME", "orders")
+DYNAMODB_TABLE = os.environ.get('DYNAMODB_TABLE_NAME', 'orders')
+USERS_TABLE = os.environ.get('USERS_TABLE_NAME', 'users')
+SSM_MAPS_KEY = "/preethi-logistics/google-maps-key"
+REGION = os.environ.get('AWS_REGION', 'us-east-1')
 
-dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
-sns = boto3.client("sns", region_name=AWS_REGION)
-orders_table = dynamodb.Table(ORDERS_TABLE)
+dynamodb = boto3.resource('dynamodb', region_name=REGION)
+sns = boto3.client('sns', region_name=REGION)
+ssm = boto3.client('ssm', region_name=REGION)
+table = dynamodb.Table(DYNAMODB_TABLE)
+users = dynamodb.Table(USERS_TABLE)
 
-def update_status(order_id, new_status):
+def get_geo(address):
     try:
-        return orders_table.update_item(
-            Key={"order_id": order_id},
-            UpdateExpression="SET #s = :s, updated_at = :t",
-            ExpressionAttributeNames={"#s": "status"},
-            ExpressionAttributeValues={":s": new_status, ":t": datetime.now(timezone.utc).isoformat()},
-            ReturnValues="UPDATED_NEW"
-        )
-    except Exception as e:
-        print("Error updating status:", e)
-        raise
-
-def send_notification(topic_arn, subject, message):
-    if not topic_arn:
-        print("No topic ARN; skipping notification.")
-        return
-    try:
-        sns.publish(TopicArn=topic_arn, Subject=subject, Message=message)
-        print(f"Notified {topic_arn}")
-    except Exception as e:
-        print("SNS publish failed:", e)
+        key = ssm.get_parameter(Name=SSM_MAPS_KEY, WithDecryption=True)['Parameter']['Value']
+        url = f"https://maps.googleapis.com/maps/api/geocode/json?address={urllib.parse.quote(address)}&key={key}"
+        with urllib.request.urlopen(url) as r:
+            data = json.loads(r.read().decode())
+            if data['status'] == 'OK':
+                loc = data['results'][0]['geometry']['location']
+                return Decimal(str(loc['lat'])), Decimal(str(loc['lng']))
+    except: pass
+    return Decimal("53.3498"), Decimal("-6.2603")
 
 def lambda_handler(event, context):
-    print("Received event:", json.dumps(event))
-    for record in event.get("Records", []):
+    for record in event['Records']:
         try:
-            body = json.loads(record.get("body", "{}"))
-            order_id = body.get("order_id")
-            if not order_id:
-                print("No order_id in message; skipping.")
-                continue
+            payload = json.loads(record['body'])
+            action = payload.get('action')
+            print(f"Processing: {action}")
 
-            resp = orders_table.get_item(Key={"order_id": order_id})
-            if "Item" not in resp:
-                print("Order not found:", order_id)
-                continue
+            if action == "CREATE_ORDER":
+                data = payload['data']
+                lat, lng = get_geo(data['deliveryAddress'])
+                
+                # Get Topic ARN
+                arn = None
+                try: arn = users.get_item(Key={'user_id': payload['customer_id']}).get('Item', {}).get('sns_topic_arn')
+                except: pass
 
-            order = resp["Item"]
-            topic = order.get("sns_topic_arn")
+                table.put_item(Item={
+                    'order_id': payload['order_id'],
+                    'customer_id': payload['customer_id'],
+                    'user_email': payload['user_email'],
+                    'contact_num': data.get('contact'),
+                    'delivery_locations': data['deliveryAddress'],
+                    'package_size': data.get('packageSize'),
+                    'status': 'Pending',
+                    'delivery_lat': lat,
+                    'delivery_lng': lng,
+                    'sns_topic_arn': arn,
+                    'created_at': payload['timestamp']
+                })
+                
+                if arn: sns.publish(TopicArn=arn, Subject="Order Received", Message=f"Order {payload['order_id'][:8]} received.")
 
-            print(f"Processing order {order_id}")
+            elif action == "MARK_DELIVERED":
+                oid = payload['order_id']
+                table.update_item(
+                    Key={'order_id': oid},
+                    UpdateExpression="SET #s=:s, delivered_at=:t",
+                    ExpressionAttributeNames={'#s': 'status'},
+                    ExpressionAttributeValues={':s': 'Delivered', ':t': payload['timestamp']}
+                )
+                item = table.get_item(Key={'order_id': oid}).get('Item', {})
+                if item.get('sns_topic_arn'):
+                    sns.publish(TopicArn=item['sns_topic_arn'], Subject="Delivered", Message=f"Order {oid[:8]} Delivered.")
 
-            # 1. mark Processing
-            update_status(order_id, "Processing")
-            send_notification(topic, "Order Processing", f"Your order {order_id[:8]} is being processed.")
+            elif action == "DELETE_ORDER":
+                table.delete_item(Key={'order_id': payload['order_id']})
 
-            # (Heavy async work would be here — e.g., routing, 3rd-party calls)
-            # For Option 1 we simulate processing quickly.
-
-            # 2. mark In Transit
-            update_status(order_id, "In Transit")
-            send_notification(topic, "Order In Transit", f"Your order {order_id[:8]} is now In Transit.")
-
-            print(f"Finished processing {order_id}")
+            elif action == "ROUTE_OPTIMIZED":
+                poly = payload['polyline']
+                for label, order_info in payload['orders_map'].items():
+                    oid = order_info['id']
+                    table.update_item(
+                        Key={'order_id': oid},
+                        UpdateExpression="SET #s=:s, polyline=:p",
+                        ExpressionAttributeNames={'#s': 'status'},
+                        ExpressionAttributeValues={':s': 'In Transit', ':p': poly}
+                    )
+                    if order_info.get('arn'):
+                        sns.publish(TopicArn=order_info['arn'], Subject="Out for Delivery", Message=f"Order {oid[:8]} is Out for Delivery.")
 
         except Exception as e:
-            print("Error handling record:", e)
-            # Do not raise — let SQS retry via visibility timeout / DLQ
-            continue
+            print(f"Error: {e}")
 
-    return {"status": "ok"}
+    return {"statusCode": 200}
