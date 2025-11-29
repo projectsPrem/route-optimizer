@@ -31,7 +31,7 @@ CORS(application)
 
 # Env Vars
 AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
-SQS_QUEUE_URL = os.getenv('SQS_QUEUE_URL')
+SQS_QUEUE_URL = os.getenv('ORDER_QUEUE_URL')
 DYNAMODB_TABLE = os.getenv('DYNAMODB_TABLE_NAME', 'orders')
 USERS_TABLE = os.getenv('USERS_TABLE_NAME', 'users')
 COGNITO_POOL_ID = os.getenv('COGNITO_USER_POOL_ID')
